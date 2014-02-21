@@ -143,7 +143,7 @@ func (p *Pipeline) rawSend(c net.Conn, cmds []byte) ([]interface{}, error) {
 }
 
 func (p *Pipeline) sendCommands(cmds []byte) (data []interface{}, err error) {
-    c, err := client.popCon()
+    c, err := p.client.popCon()
     if err != nil {
         println(err.Error())
         goto End
@@ -151,7 +151,7 @@ func (p *Pipeline) sendCommands(cmds []byte) (data []interface{}, err error) {
 
     data, err = p.rawSend(c, cmds)
     if err == io.EOF {
-        c, err = client.openConnection()
+        c, err = p.client.openConnection()
         if err != nil {
             println(err.Error())
             goto End
@@ -161,7 +161,7 @@ func (p *Pipeline) sendCommands(cmds []byte) (data []interface{}, err error) {
     }
 
 End:
-    client.pushCon(c)
+    p.client.pushCon(c)
     return
 }
 
