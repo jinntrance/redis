@@ -173,7 +173,6 @@ func (p *Pipeline) Execute() ([]interface{}, error) {
     if len(p.stack) == 0 {
         return nil, nil
     }
-    fmt.Println(p.stack)
     rawBytes := []byte{}
     for _, op := range p.stack {
         rawBytes = append(rawBytes, commandBytes(op.command, op.args...)...)
