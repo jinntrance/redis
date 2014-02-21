@@ -36,7 +36,7 @@ func (p *Pipeline) rawSend(c net.Conn, cmds []byte) ([]interface{}, error) {
     if err != nil {
         return nil, err
     }
-    reader := bufio.NewReader(c)
+    reader := bufio.NewReaderSize(c, 4096*1024)
     responses := make([]interface{}, len(p.stack))
     for i := 0; i < len(p.stack); i++ {
         responses[i], err = readResponse(reader)
