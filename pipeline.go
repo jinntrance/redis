@@ -182,9 +182,4 @@ func (p *Pipeline) Execute() ([]interface{}, error) {
     return data, err
 }
 
-// func (p *Pipeline) Get(key string) *Pipeline {
-//     p.executeCommand("GET", key)
-//     return p
-// }
-
 var _ = fmt.Println
