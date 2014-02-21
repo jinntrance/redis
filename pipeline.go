@@ -5,8 +5,6 @@ import (
     "io"
     "net"
     "bufio"
-    "reflect"
-    "strings"
     "strconv"
 )
 
@@ -15,7 +13,6 @@ func (client *Client) Pipeline() *Pipeline {
         client: client,
         stack : make([]operand, 0),
     }
-    p.initCalls()
     return p
 }
 
@@ -27,98 +24,6 @@ type operand struct {
 type Pipeline struct {
     client *Client
     stack []operand
-    
-    Exists func(string) *Pipeline
-    Del func(string) *Pipeline
-    Type func(string) *Pipeline
-    Keys func(string) *Pipeline
-    Expire func(string, int64) *Pipeline
-    Set func(string, []byte) *Pipeline
-    Get func(string) *Pipeline
-    Incr func(string) *Pipeline
-    Incrby func(string, int64) *Pipeline
-    Decr func(string) *Pipeline
-    Decrby func(string, int64) *Pipeline
-    Append func(string, []byte) *Pipeline
-
-    Rpush func(string, []byte) *Pipeline
-    Lpush func(string, []byte) *Pipeline
-    Llen func(string) *Pipeline
-    Lrange func(string, int, int) *Pipeline
-    Ltrim func(string, int, int) *Pipeline
-    Lindex func(string, int) *Pipeline
-    Lset func(string, int, []byte) *Pipeline
-    Lrem func(string, int, []byte) *Pipeline
-    Lpop func(string) *Pipeline
-    Rpop func(string) *Pipeline
-    Rpoplpush func(string, string) *Pipeline
-
-    Hset func(string, string, []byte) *Pipeline
-    Hget func(string, string) *Pipeline
-    Hgetall func(string) *Pipeline
-    Hdel func(string, string) *Pipeline
-    Hlen func(string) *Pipeline
-    Hkeys func(string) *Pipeline
-    Hvals func(string) *Pipeline
-}
-
-func (p *Pipeline) initCalls() {
-    p.initCall(&p.Exists, "exists")
-    p.initCall(&p.Del, "del")
-    p.initCall(&p.Type, "type")
-    p.initCall(&p.Keys, "keys")
-    p.initCall(&p.Expire, "expire")    
-    p.initCall(&p.Get, "get")
-    p.initCall(&p.Set, "set")
-    p.initCall(&p.Incr, "incr")
-    p.initCall(&p.Incrby, "incrby")
-    p.initCall(&p.Decr, "decr")
-    p.initCall(&p.Decrby, "decrby")
-    p.initCall(&p.Append, "append")
-
-    p.initCall(&p.Rpush, "rpush")
-    p.initCall(&p.Lpush, "lpush")
-    p.initCall(&p.Llen, "llen")
-    p.initCall(&p.Lrange, "lrange")
-    p.initCall(&p.Ltrim, "ltrim")
-    p.initCall(&p.Lindex, "lindex")
-    p.initCall(&p.Lset, "lset")
-    p.initCall(&p.Lrem, "lrem")
-    p.initCall(&p.Lpop, "lpop")
-    p.initCall(&p.Rpop, "rpop")
-    p.initCall(&p.Rpoplpush, "rpoplpush")
-
-    p.initCall(&p.Hset, "hset")
-    p.initCall(&p.Hget, "hget")
-    p.initCall(&p.Hgetall, "hgetall")
-    p.initCall(&p.Hdel, "hdel")
-    p.initCall(&p.Hlen, "hlen")
-    p.initCall(&p.Hkeys, "hkeys")
-    p.initCall(&p.Hvals, "hvals")
-}
-
-func (p *Pipeline) initCall(fptr interface{}, cmd string) {
-    fn := reflect.ValueOf(fptr).Elem()
-    innerFunc := func(in []reflect.Value) []reflect.Value {
-        args := make([]string, len(in))
-        for i := range in {
-            switch in[i].Kind() {
-            case reflect.String:
-                args[i] = in[i].String()
-            case reflect.Int, reflect.Int64:
-                args[i] = strconv.FormatInt(in[i].Int(), 10)
-            case reflect.Slice:
-                typ := in[i].Type()
-                if typ.Elem().Kind() == reflect.Uint8 {
-                    args[i] = string(in[i].Interface().([]byte))
-                }
-            }
-        }
-        p.executeCommand(strings.ToUpper(cmd), args...)
-        return []reflect.Value{reflect.ValueOf(p)}
-    }
-    v := reflect.MakeFunc(fn.Type(), innerFunc)
-    fn.Set(v)
 }
 
 func (p *Pipeline) executeCommand(command string, args...string) {
@@ -180,6 +85,156 @@ func (p *Pipeline) Execute() ([]interface{}, error) {
     data, err := p.sendCommands(rawBytes)
     p.Reset()
     return data, err
+}
+
+func (p *Pipeline) Exists(key string) *Pipeline {
+    p.executeCommand("EXISTS", key)
+    return p
+}
+
+func (p *Pipeline) Del(key string) *Pipeline {
+    p.executeCommand("DEL", key)
+    return p
+}
+
+func (p *Pipeline) Type(key string) *Pipeline {
+    p.executeCommand("TYPE", key)
+    return p
+}
+
+func (p *Pipeline) Keys(key string) *Pipeline {
+    p.executeCommand("KEYS", key)
+    return p
+}
+
+func (p *Pipeline) Expire(key string, timeout int64) *Pipeline {
+    p.executeCommand("EXPIRE", key, strconv.FormatInt(timeout, 10))
+    return p
+}
+
+func (p *Pipeline) Set(key string, value []byte) *Pipeline {
+    p.executeCommand("SET", key, string(value))
+    return p
+}
+
+func (p *Pipeline) Get(key string) *Pipeline {
+    p.executeCommand("GET", key)
+    return p
+}
+
+func (p *Pipeline) Incr(key string) *Pipeline {
+    p.executeCommand("INCR", key)
+    return p
+}
+
+func (p *Pipeline) Incrby(key string, value int64) *Pipeline {
+    p.executeCommand("INCRBY", key, strconv.FormatInt(value, 10))
+    return p
+}
+
+func (p *Pipeline) Decr(key string) *Pipeline {
+    p.executeCommand("DECR", key)
+    return p
+}
+
+func (p *Pipeline) Decrby(key string, value int64) *Pipeline {
+    p.executeCommand("DECRBY", key, strconv.FormatInt(value, 10))
+    return p
+}
+
+func (p *Pipeline) Append(key string, value []byte) *Pipeline {
+    p.executeCommand("APPEND", key, string(value))
+    return p
+}
+
+func (p *Pipeline) Rpush(key string, value []byte) *Pipeline {
+    p.executeCommand("RPUSH", key, string(value))
+    return p
+}
+
+func (p *Pipeline) Lpush(key string, value []byte) *Pipeline {
+    p.executeCommand("LPUSH", key, string(value))
+    return p
+}
+
+func (p *Pipeline) Llen(key string) *Pipeline {
+    p.executeCommand("LLEN", key)
+    return p
+}
+
+func (p *Pipeline) Lrange(key string, start, end int) *Pipeline {
+    p.executeCommand("LRANGE", key, strconv.Itoa(start), strconv.Itoa(end))
+    return p
+}
+
+func (p *Pipeline) Ltrim(key string, start, end int) *Pipeline {
+    p.executeCommand("LTRIM", key, strconv.Itoa(start), strconv.Itoa(end))
+    return p
+}
+
+func (p *Pipeline) Lindex(key string, index int) *Pipeline {
+    p.executeCommand("LINDEX", key, strconv.Itoa(index))
+    return p
+}
+
+func (p *Pipeline) Lset(key string, index int, value []byte) *Pipeline {
+    p.executeCommand("LSET", key, strconv.Itoa(index), string(value))
+    return p
+}
+
+func (p *Pipeline) Lrem(key string, count int, value []byte) *Pipeline {
+    p.executeCommand("LREM", key, strconv.Itoa(count), string(value))
+    return p
+}
+
+func (p *Pipeline) Lpop(key string) *Pipeline {
+    p.executeCommand("LPOP", key)
+    return p
+}
+
+func (p *Pipeline) Rpop(key string) *Pipeline {
+    p.executeCommand("RPOP", key)
+    return p
+}
+
+func (p *Pipeline) Rpoplpush(key string, anKey string) *Pipeline {
+    p.executeCommand("RPOPLPUSH", key, anKey)
+    return p
+}
+
+func (p *Pipeline) Hset(key string, field string, value []byte) *Pipeline {
+    p.executeCommand("HSET", key, field, string(value))
+    return p
+}
+
+func (p *Pipeline) Hget(key string, field string) *Pipeline {
+    p.executeCommand("HGET", key, field)
+    return p
+}
+
+func (p *Pipeline) Hgetall(key string) *Pipeline {
+    p.executeCommand("HGETALL", key)
+    return p
+}
+
+func (p *Pipeline) Hdel(key string, field string) *Pipeline {
+    p.executeCommand("HDEL", key, field)
+    return p
+}
+
+func (p *Pipeline) Hlen(key string) *Pipeline {
+    p.executeCommand("HLEN", key)
+    return p
+}
+
+func (p *Pipeline) Hkeys(key string) *Pipeline {
+    p.executeCommand("HKEYS", key)
+    return p
+}
+
+func (p *Pipeline) Hvals(key string) *Pipeline {
+    p.executeCommand("HVALS", key)
+    return p
 }
 
 var _ = fmt.Println
