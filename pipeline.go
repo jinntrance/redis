@@ -49,6 +49,7 @@ func (p *Pipeline) rawSend(c net.Conn, cmds []byte) ([]interface{}, error) {
 
 func (p *Pipeline) sendCommands(cmds []byte) (data []interface{}, err error) {
     c, err := p.client.popCon()
+	defer p.client.pushConAndClean(c,err)
     if err != nil {
         println(err.Error())
         goto End
@@ -66,7 +67,6 @@ func (p *Pipeline) sendCommands(cmds []byte) (data []interface{}, err error) {
     }
 
 End:
-    p.client.pushCon(c)
     return
 }
 
