@@ -11,10 +11,12 @@ import (
     "reflect"
     "strconv"
     "strings"
+    "time"
 )
 
 const (
     defaultPoolSize = 5
+    defaultRecycleTimeout = 30 //30 minuets
 )
 
 var defaultAddr = "127.0.0.1:6379"
@@ -26,6 +28,7 @@ type Client struct {
     MaxPoolSize int
     //the connection pool
     pool chan net.Conn
+    recycleTimeout int
 }
 
 type RedisError string
@@ -288,14 +291,32 @@ End:
     return err
 }
 
+func (client *Client) init(){
+	if client.MaxPoolSize <= 0 {
+		client.MaxPoolSize = defaultPoolSize
+	}
+	if 0 >= client.recycleTimeout {
+		client.recycleTimeout = defaultRecycleTimeout
+	}
+	go func() {
+		for {
+			select {
+			case <-time.After(time.Duration(client.recycleTimeout) * time.Minute):
+			for c := range client.pool {
+				c.Close()
+			}
+			}
+		}
+	}()
+	if nil== client.pool {
+		client.pool = make(chan net.Conn, client.MaxPoolSize)
+	}
+}
+
 func (client *Client) popCon() (net.Conn, error) {
-    if client.pool == nil {
-        poolSize := client.MaxPoolSize
-        if poolSize == 0 {
-            poolSize = defaultPoolSize
-        }
-        client.pool = make(chan net.Conn, poolSize)
-        }
+    if nil == client.pool {
+        client.init()
+    }
 	select {
 	//if there exists one non-nil client in the pool, then fetch it and return
 	case c := <-client.pool:
