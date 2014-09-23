@@ -11,10 +11,12 @@ import (
     "reflect"
     "strconv"
     "strings"
+    "time"
 )
 
 const (
     defaultPoolSize = 5
+    defaultRecycleTimeout = 30 //30 minuets
 )
 
 var defaultAddr = "127.0.0.1:6379"
@@ -26,6 +28,7 @@ type Client struct {
     MaxPoolSize int
     //the connection pool
     pool chan net.Conn
+    recycleTimeout int
 }
 
 type RedisError string
@@ -195,34 +198,21 @@ func (client *Client) sendCommand(cmd string, args ...string) (data interface{},
     // grab a connection from the pool
     var b []byte
     c, err := client.popCon()
-    if err != nil {
-        println(err.Error())
-        goto End
-    }
+	defer client.pushConAndClean(c,err)
 
     b = commandBytes(cmd, args...)
     data, err = client.rawSend(c, b)
     if err == io.EOF {
         c, err = client.openConnection()
-        if err != nil {
-            println(err.Error())
-            goto End
-        }
-
-        data, err = client.rawSend(c, b)
-    }
-
-End:
-
-    //add the client back to the queue
-    client.pushCon(c)
-
-    return data, err
+		data, err = client.rawSend(c, b)
+	}
+	return data, err
 }
 
 func (client *Client) sendCommands(cmdArgs <-chan []string, data chan<- interface{}) (err error) {
     // grab a connection from the pool
     c, err := client.popCon()
+	defer client.pushConAndClean(c,err)
     var reader *bufio.Reader
     var pong interface{}
     var errs chan error
@@ -298,38 +288,68 @@ func (client *Client) sendCommands(cmdArgs <-chan []string, data chan<- interfac
 
 End:
 
-    // Close client and synchronization issues are a nightmare to solve.
-    c.Close()
-
-    // Push nil back onto queue
-    client.pushCon(nil)
-
     return err
 }
 
-func (client *Client) popCon() (net.Conn, error) {
-    if client.pool == nil {
-        poolSize := client.MaxPoolSize
-        if poolSize == 0 {
-            poolSize = defaultPoolSize
-        }
-        client.pool = make(chan net.Conn, poolSize)
-        for i := 0; i < poolSize; i++ {
-            //add dummy values to the pool
-            client.pool <- nil
-        }
-    }
-    // grab a connection from the pool
-    c := <-client.pool
-
-    if c == nil {
-        return client.openConnection()
-    }
-    return c, nil
+func (client *Client) init(){
+	if client.MaxPoolSize <= 0 {
+		client.MaxPoolSize = defaultPoolSize
+	}
+	if 0 >= client.recycleTimeout {
+		client.recycleTimeout = defaultRecycleTimeout
+	}
+	go func() {
+		for {
+			select {
+			case <-time.After(time.Duration(client.recycleTimeout) * time.Minute):
+			for c := range client.pool {
+				c.Close()
+			}
+			}
+		}
+	}()
+	if nil== client.pool {
+		client.pool = make(chan net.Conn, client.MaxPoolSize)
+	}
 }
 
-func (client *Client) pushCon(c net.Conn) {
-    client.pool <- c
+func (client *Client) popCon() (net.Conn, error) {
+    if nil == client.pool {
+        client.init()
+    }
+	select {
+	//if there exists one non-nil client in the pool, then fetch it and return
+	case c := <-client.pool:
+		if nil == c {
+			return client.openConnection()
+		} else {
+			return c, nil
+		}
+	//else return a new one
+	default:
+		return client.openConnection()
+	}
+}
+
+//close unnecessary clients when the channel is full
+func (client *Client) pushConAndClean(c net.Conn, lastError error) {
+	if nil == c {
+		return
+	}
+	//close the connection  if error EOF occurs( means the TCP connection is closed by the other end)
+	//lastError is either nil or EOF for net.Conn
+	if nil != lastError {
+		c.Close()
+	} else {
+		select {
+		//if we can push back c to the channel, then push back c to the pool
+		case client.pool <- c:
+			return
+			//else close the connection if the channel is full
+		default:
+			c.Close()
+		}
+	}
 }
 
 // General Commands
@@ -632,7 +652,6 @@ func (client *Client) Strlen(key string) (int, error) {
 
     return int(res.(int64)), nil
 }
-
 
 // List commands
 
@@ -1103,7 +1122,7 @@ func valueToString(v reflect.Value) (string, error) {
         typ := v.Type()
         if typ.Elem().Kind() == reflect.Uint || typ.Elem().Kind() == reflect.Uint8 || typ.Elem().Kind() == reflect.Uint16 || typ.Elem().Kind() == reflect.Uint32 || typ.Elem().Kind() == reflect.Uint64 || typ.Elem().Kind() == reflect.Uintptr {
             if v.Len() > 0 {
-                if v.Index(1).OverflowUint(257) {
+                if v.Index(0).OverflowUint(257) {
                     return string(v.Interface().([]byte)), nil
                 }
             }
