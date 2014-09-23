@@ -291,7 +291,7 @@ End:
     return err
 }
 
-func (client *Client) init(){
+func (client *Client) init() {
 	if client.MaxPoolSize <= 0 {
 		client.MaxPoolSize = defaultPoolSize
 	}
@@ -302,13 +302,19 @@ func (client *Client) init(){
 		for {
 			select {
 			case <-time.After(time.Duration(client.recycleTimeout) * time.Minute):
-			for c := range client.pool {
-				c.Close()
-			}
+				for {
+					select {
+					case c := <-client.pool:
+						c.Close()
+					default:
+						goto END
+					}
+				}
+			END:
 			}
 		}
 	}()
-	if nil== client.pool {
+	if nil == client.pool {
 		client.pool = make(chan net.Conn, client.MaxPoolSize)
 	}
 }
