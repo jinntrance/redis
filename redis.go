@@ -29,8 +29,8 @@ type Client struct {
 	MaxPoolSize int
 	//the connection pool
 	pool           chan net.Conn
-	recycleTimeout int
-	dialTimeout    int // in ms
+	RecycleTimeout int
+	DialTimeout    int // in ms
 }
 
 type RedisError string
@@ -171,7 +171,7 @@ func (client *Client) openConnection() (c net.Conn, err error) {
 	if client.Addr != "" {
 		addr = client.Addr
 	}
-	c, err = net.DialTimeout("tcp", addr, time.Duration(client.dialTimeout)*time.Millisecond)
+	c, err = net.DialTimeout("tcp", addr, time.Duration(client.DialTimeout)*time.Millisecond)
 	if err != nil {
 		return
 	}
@@ -297,18 +297,18 @@ func (client *Client) init() {
 	if client.MaxPoolSize <= 0 {
 		client.MaxPoolSize = defaultPoolSize
 	}
-	if 0 >= client.recycleTimeout {
-		client.recycleTimeout = defaultRecycleTimeout
+	if 0 >= client.RecycleTimeout {
+		client.RecycleTimeout = defaultRecycleTimeout
 	}
 
-	if 0 >= client.dialTimeout {
-		client.dialTimeout = defaultDialTimeout
+	if 0 >= client.DialTimeout {
+		client.DialTimeout = defaultDialTimeout
 	}
 
 	go func() {
 		for {
 			select {
-			case <-time.After(time.Duration(client.recycleTimeout) * time.Minute):
+			case <-time.After(time.Duration(client.RecycleTimeout) * time.Minute):
 				for {
 					select {
 					case c := <-client.pool:
