@@ -29,7 +29,7 @@ type Client struct {
 	MaxPoolSize int
 	//the connection pool
 	pool           chan net.Conn
-	recycleTimeout int // in minutes
+	recycleTimeout int
 	dialTimeout    int // in ms
 }
 
